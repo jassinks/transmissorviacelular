@@ -2,7 +2,11 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- Tags para Tela Cheia real no iPhone quando salvo na Tela de Início -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Câmera OBS">
     <title>Câmera Móvel - OBS</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
@@ -21,67 +25,86 @@
             width: 100%; height: 100%; object-fit: contain;
             transition: transform 0.15s ease-out;
         }
+
+        /* Barra Superior */
         .topo {
-            position: fixed; top: 14px; left: 14px; right: 14px; z-index: 10;
-            display: flex; justify-content: space-between; align-items: center;
-            transition: opacity 0.25s;
+            position: fixed; top: max(14px, env(safe-area-inset-top)); left: 14px; right: 14px; z-index: 10;
+            display: flex; justify-content: space-between; align-items: center; gap: 8px;
+            transition: opacity 0.2s;
         }
         #badge-status {
-            background: rgba(0, 0, 0, 0.72); padding: 8px 14px; border-radius: 999px;
-            font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px;
-            backdrop-filter: blur(6px);
+            background: rgba(0, 0, 0, 0.78); padding: 8px 12px; border-radius: 999px;
+            font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 7px;
         }
-        .ponto { width: 10px; height: 10px; border-radius: 50%; background: #888; }
+        .ponto { width: 9px; height: 9px; border-radius: 50%; background: #888; }
         .ponto.pronto { background: #2fff00; }
-        .ponto.no-ar { background: #ff2a2a; animation: piscar 1.2s infinite; }
-        @keyframes piscar { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+        .ponto.no-ar { background: #ff2a2a; }
+        .topo-acoes { display: flex; gap: 6px; }
 
+        /* Controles Inferiores */
         .controles {
-            position: fixed; bottom: 20px; left: 14px; right: 14px; z-index: 10;
-            display: flex; flex-direction: column; gap: 10px; align-items: center;
-            transition: opacity 0.25s;
+            position: fixed; bottom: max(18px, env(safe-area-inset-bottom)); left: 14px; right: 14px; z-index: 10;
+            display: flex; flex-direction: column; gap: 8px; align-items: center;
+            transition: opacity 0.2s;
         }
         .linha-botoes {
             display: flex; gap: 8px; width: 100%; max-width: 420px; justify-content: center;
         }
         button {
-            border: none; border-radius: 12px; font-weight: 700; font-size: 14px;
-            cursor: pointer; color: #fff; padding: 13px 16px;
-            background: rgba(30, 30, 30, 0.85); backdrop-filter: blur(6px);
-            transition: transform 0.1s, background 0.2s;
+            border: none; border-radius: 12px; font-weight: 700; font-size: 13px;
+            cursor: pointer; color: #fff; padding: 12px 14px;
+            background: rgba(30, 30, 30, 0.88);
+            transition: transform 0.1s, background 0.15s;
         }
         button:active { transform: scale(0.95); }
         #btn-transmitir {
-            width: 100%; max-width: 420px; padding: 16px; font-size: 16px;
+            width: 100%; max-width: 420px; padding: 15px; font-size: 15px;
             background: #007a08; text-transform: uppercase; letter-spacing: 0.5px;
         }
         #btn-transmitir.ao-vivo { background: #c62828; }
         .btn-secundario { flex: 1; }
         .btn-ativo { background: #1565c0; }
-        .btn-mutado { background: rgba(180, 30, 30, 0.85); }
-        .btn-mini { padding: 8px 12px; font-size: 12px; border-radius: 999px; }
+        .btn-mutado { background: rgba(160, 28, 28, 0.9); }
+        .btn-mini { padding: 8px 11px; font-size: 12px; border-radius: 999px; }
 
-        .zoom-bar {
-            display: flex; align-items: center; gap: 8px;
-            background: rgba(0, 0, 0, 0.65); padding: 6px 10px; border-radius: 999px;
-            backdrop-filter: blur(6px);
+        /* Seletor de Resolução + Zoom */
+        .barra-ferramentas {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            width: 100%; max-width: 420px;
         }
+        .grupo-pill {
+            display: flex; align-items: center; gap: 4px;
+            background: rgba(0, 0, 0, 0.75); padding: 4px; border-radius: 999px;
+        }
+        .btn-res {
+            padding: 7px 11px; border-radius: 999px; font-size: 12px;
+            background: transparent; color: #bbb;
+        }
+        .btn-res.ativa { background: #1565c0; color: #fff; }
         .zoom-bar button {
-            padding: 8px 16px; border-radius: 999px; font-size: 16px;
-            background: rgba(255, 255, 255, 0.15);
+            padding: 6px 14px; border-radius: 999px; font-size: 15px;
+            background: rgba(255, 255, 255, 0.14);
         }
         #zoom-label {
-            min-width: 48px; text-align: center; font-size: 13px; font-weight: 700;
+            min-width: 40px; text-align: center; font-size: 12px; font-weight: 700;
         }
 
+        /* Modo Tela Limpa */
         body.tela-limpa .controles,
-        body.tela-limpa #btn-limpar { opacity: 0; pointer-events: none; }
-        #aviso-toque {
-            position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
-            z-index: 5; font-size: 11px; color: rgba(255,255,255,0.45);
-            display: none; pointer-events: none;
+        body.tela-limpa .topo-acoes { opacity: 0; pointer-events: none; }
+
+        /* Modo Economia de Bateria (OLED Preto Absoluto) */
+        #overlay-economia {
+            position: fixed; inset: 0; z-index: 99; background: #000;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; padding: 24px;
         }
-        body.tela-limpa #aviso-toque { display: block; }
+        body.modo-economia #overlay-economia { display: flex; }
+        body.modo-economia #preview { display: none; } /* Pausa renderização local para poupar GPU/bateria */
+        body.modo-economia .topo,
+        body.modo-economia .controles { display: none; }
+        .eco-texto { color: rgba(255, 255, 255, 0.28); font-size: 13px; margin-top: 8px; }
+        .eco-ponto { color: rgba(255, 50, 50, 0.55); font-size: 14px; font-weight: 700; }
     </style>
 </head>
 <body>
@@ -93,28 +116,50 @@
     <div class="topo">
         <div id="badge-status">
             <span class="ponto" id="ponto"></span>
-            <span id="texto-status">Pronto para iniciar</span>
+            <span id="texto-status">Pronto</span>
         </div>
-        <button id="btn-limpar" class="btn-mini">Tela Limpa</button>
+        <div class="topo-acoes">
+            <button id="btn-economia" class="btn-mini">🔋 Economia</button>
+            <button id="btn-fullscreen" class="btn-mini">⛶ Tela Cheia</button>
+            <button id="btn-limpar" class="btn-mini">Ocultar</button>
+        </div>
     </div>
 
     <div class="controles">
-        <div class="zoom-bar">
-            <button id="btn-zoom-menos">−</button>
-            <span id="zoom-label">1.0x</span>
-            <button id="btn-zoom-mais">+</button>
+        <div class="barra-ferramentas">
+            <div class="grupo-pill" id="seletor-res">
+                <button class="btn-res" data-res="720p">720p</button>
+                <button class="btn-res ativa" data-res="1080p">1080p</button>
+                <button class="btn-res" data-res="4k">4K</button>
+            </div>
+            <div class="grupo-pill zoom-bar">
+                <button id="btn-zoom-menos">−</button>
+                <span id="zoom-label">1.0x</span>
+                <button id="btn-zoom-mais">+</button>
+            </div>
         </div>
+
         <div class="linha-botoes">
             <button id="btn-audio" class="btn-secundario btn-mutado">🎤 Áudio: OFF</button>
             <button id="btn-camera" class="btn-secundario">🔄 Virar Câmera</button>
         </div>
-        <button id="btn-transmitir">🎥 Iniciar Câmera 1080p</button>
+        <button id="btn-transmitir">🎥 Iniciar Câmera</button>
     </div>
 
-    <div id="aviso-toque">Toque na tela para mostrar os controles</div>
+    <!-- Tela Preta OLED para Economizar Bateria -->
+    <div id="overlay-economia">
+        <div class="eco-ponto">● TRANSMITINDO EM ECONOMIA DE BATERIA</div>
+        <div class="eco-texto">A tela não vai desligar. Toque em qualquer lugar para voltar.</div>
+    </div>
 
     <script>
         const CHAVE_OBS = 'obs-otacilio-celular-master';
+
+        const RESOLUCOES = {
+            '720p':  { w: 1280, h: 720,  bitrate: 1800000 },
+            '1080p': { w: 1920, h: 1080, bitrate: 3000000 },
+            '4k':    { w: 3840, h: 2160, bitrate: 6000000 }
+        };
 
         const preview = document.getElementById('preview');
         const previewWrap = document.getElementById('preview-wrap');
@@ -122,11 +167,15 @@
         const btnAudio = document.getElementById('btn-audio');
         const btnCamera = document.getElementById('btn-camera');
         const btnLimpar = document.getElementById('btn-limpar');
+        const btnFullscreen = document.getElementById('btn-fullscreen');
+        const btnEconomia = document.getElementById('btn-economia');
+        const overlayEconomia = document.getElementById('overlay-economia');
         const btnZoomMenos = document.getElementById('btn-zoom-menos');
         const btnZoomMais = document.getElementById('btn-zoom-mais');
         const zoomLabel = document.getElementById('zoom-label');
         const textoStatus = document.getElementById('texto-status');
         const ponto = document.getElementById('ponto');
+        const botoesRes = document.querySelectorAll('.btn-res');
 
         let peer = null;
         let peerAberto = false;
@@ -135,9 +184,29 @@
         let conexaoDados = null;
         let wakeLock = null;
         let modoCamera = 'environment';
+        let resolucaoAtual = '1080p';
         let audioAtivo = false;
         let zoomAtual = 1.0;
         let usandoZoomHardware = false;
+
+        // Mantém a tela sempre acesa (Wake Lock reforçado)
+        async function ativarWakeLock() {
+            try {
+                if ('wakeLock' in navigator && !wakeLock) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { wakeLock = null; });
+                }
+            } catch (e) {}
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && streamAtual) {
+                ativarWakeLock();
+            }
+        });
+        document.addEventListener('touchstart', () => {
+            if (streamAtual && !wakeLock) ativarWakeLock();
+        }, { passive: true });
 
         function iniciarPeer() {
             peer = new Peer({
@@ -152,7 +221,7 @@
             peer.on('open', () => {
                 peerAberto = true;
                 if (!chamadaAtiva) {
-                    textoStatus.textContent = 'Servidor conectado';
+                    textoStatus.textContent = 'Pronto (' + resolucaoAtual + ')';
                     ponto.className = 'ponto pronto';
                 }
                 if (streamAtual && !chamadaAtiva) {
@@ -173,30 +242,16 @@
             });
         }
 
-        async function ativarWakeLock() {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                }
-            } catch (e) {}
-        }
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && chamadaAtiva) {
-                ativarWakeLock();
-            }
-        });
-
-        // Captura flexível (não trava orientação ao girar o iPhone)
-        async function capturarCamera(facing) {
+        async function capturarCamera(facing, resKey) {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 throw new Error('Navegador sem acesso à câmera (use HTTPS no Safari).');
             }
-            const constraintsAlta = {
+            const cfg = RESOLUCOES[resKey] || RESOLUCOES['1080p'];
+            const constraints = {
                 video: {
                     facingMode: { ideal: facing },
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 },
+                    width: { ideal: cfg.w },
+                    height: { ideal: cfg.h },
                     frameRate: { ideal: 30, max: 30 }
                 },
                 audio: {
@@ -205,9 +260,10 @@
                     autoGainControl: true
                 }
             };
+
             let stream;
             try {
-                stream = await navigator.mediaDevices.getUserMedia(constraintsAlta);
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
             } catch (e) {
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: facing },
@@ -215,7 +271,6 @@
                 });
             }
 
-            // Prioriza fluidez de movimento e reforça foco automático contínuo
             const videoTrack = stream.getVideoTracks()[0];
             if (videoTrack) {
                 if ('contentHint' in videoTrack) videoTrack.contentHint = 'motion';
@@ -231,8 +286,7 @@
             return stream;
         }
 
-        // Otimiza bitrate para 3 Mbps priorizando fluidez sem travadas
-        async function otimizarTransmissao(call) {
+        async function otimizarTransmissao(call, resKey) {
             try {
                 const pc = call.peerConnection;
                 if (!pc) return;
@@ -241,7 +295,7 @@
                 const params = sender.getParameters();
                 if (!params.encodings) params.encodings = [{}];
                 params.degradationPreference = 'maintain-framerate';
-                params.encodings[0].maxBitrate = 3000000; // 3 Mbps estável no Wi-Fi
+                params.encodings[0].maxBitrate = (RESOLUCOES[resKey] || RESOLUCOES['1080p']).bitrate;
                 await sender.setParameters(params);
             } catch (e) {}
         }
@@ -257,14 +311,59 @@
             });
 
             chamadaAtiva = peer.call(CHAVE_OBS, streamAtual);
-            setTimeout(() => otimizarTransmissao(chamadaAtiva), 1000);
+            setTimeout(() => otimizarTransmissao(chamadaAtiva, resolucaoAtual), 1000);
 
-            textoStatus.textContent = 'NO AR (OBS)';
+            textoStatus.textContent = 'NO AR (' + resolucaoAtual + ')';
             ponto.className = 'ponto no-ar';
             btnTransmitir.textContent = '✖ Encerrar Câmera';
             btnTransmitir.classList.add('ao-vivo');
         }
 
+        // Troca de câmera ou resolução ao vivo sem derrubar o OBS
+        async function atualizarStreamVideo() {
+            if (!streamAtual) return;
+            try {
+                const novoStream = await capturarCamera(modoCamera, resolucaoAtual);
+                const novaTrack = novoStream.getVideoTracks()[0];
+
+                if (chamadaAtiva && chamadaAtiva.peerConnection) {
+                    const sender = chamadaAtiva.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (sender) await sender.replaceTrack(novaTrack);
+                    await otimizarTransmissao(chamadaAtiva, resolucaoAtual);
+                }
+
+                streamAtual.getVideoTracks().forEach(t => t.stop());
+                streamAtual.removeTrack(streamAtual.getVideoTracks()[0]);
+                streamAtual.addTrack(novaTrack);
+                preview.srcObject = streamAtual;
+                novoStream.getAudioTracks().forEach(t => t.stop());
+
+                textoStatus.textContent = 'NO AR (' + resolucaoAtual + ')';
+                aplicarZoom(1.0);
+            } catch (e) {
+                alert('Erro ao ajustar câmera: ' + e.message);
+            }
+        }
+
+        // Seletor de Resolução (720p / 1080p / 4K)
+        botoesRes.forEach(btn => {
+            btn.onclick = async () => {
+                const novaRes = btn.dataset.res;
+                if (novaRes === resolucaoAtual) return;
+                resolucaoAtual = novaRes;
+                botoesRes.forEach(b => b.classList.remove('ativa'));
+                btn.classList.add('ativa');
+
+                if (streamAtual) {
+                    textoStatus.textContent = 'Trocando para ' + resolucaoAtual + '...';
+                    await atualizarStreamVideo();
+                } else {
+                    textoStatus.textContent = 'Pronto (' + resolucaoAtual + ')';
+                }
+            };
+        });
+
+        // Zoom
         async function aplicarZoom(novoZoom) {
             zoomAtual = Math.min(4.0, Math.max(1.0, Math.round(novoZoom * 10) / 10));
             zoomLabel.textContent = zoomAtual.toFixed(1) + 'x';
@@ -298,6 +397,7 @@
         btnZoomMais.onclick = () => aplicarZoom(zoomAtual + 0.5);
         btnZoomMenos.onclick = () => aplicarZoom(zoomAtual - 0.5);
 
+        // Áudio
         function aplicarEstadoAudio() {
             if (streamAtual) {
                 streamAtual.getAudioTracks().forEach(t => { t.enabled = audioAtivo; });
@@ -311,31 +411,13 @@
             aplicarEstadoAudio();
         };
 
+        // Virar Câmera
         btnCamera.onclick = async () => {
             modoCamera = (modoCamera === 'environment') ? 'user' : 'environment';
-            if (!streamAtual) return;
-
-            try {
-                const novoStream = await capturarCamera(modoCamera);
-                const novaTrack = novoStream.getVideoTracks()[0];
-
-                if (chamadaAtiva && chamadaAtiva.peerConnection) {
-                    const sender = chamadaAtiva.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-                    if (sender) await sender.replaceTrack(novaTrack);
-                }
-
-                streamAtual.getVideoTracks().forEach(t => t.stop());
-                streamAtual.removeTrack(streamAtual.getVideoTracks()[0]);
-                streamAtual.addTrack(novaTrack);
-                preview.srcObject = streamAtual;
-                novoStream.getAudioTracks().forEach(t => t.stop());
-
-                aplicarZoom(1.0);
-            } catch (e) {
-                alert('Erro ao trocar câmera: ' + e.message);
-            }
+            await atualizarStreamVideo();
         };
 
+        // Iniciar / Encerrar
         btnTransmitir.onclick = async () => {
             if (streamAtual) {
                 if (chamadaAtiva) chamadaAtiva.close();
@@ -348,7 +430,7 @@
 
             try {
                 textoStatus.textContent = 'Abrindo câmera...';
-                streamAtual = await capturarCamera(modoCamera);
+                streamAtual = await capturarCamera(modoCamera, resolucaoAtual);
                 aplicarEstadoAudio();
                 preview.srcObject = streamAtual;
                 await preview.play().catch(() => {});
@@ -365,6 +447,34 @@
             }
         };
 
+        // Tela Cheia
+        btnFullscreen.onclick = () => {
+            const el = document.documentElement;
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (el.requestFullscreen) {
+                    el.requestFullscreen().catch(() => {});
+                } else if (el.webkitRequestFullscreen) {
+                    el.webkitRequestFullscreen();
+                } else {
+                    // Fallback para iPhone Safari em aba comum
+                    document.body.classList.add('tela-limpa');
+                }
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            }
+        };
+
+        // Modo Economia de Bateria (OLED)
+        btnEconomia.onclick = (e) => {
+            e.stopPropagation();
+            document.body.classList.add('modo-economia');
+        };
+        overlayEconomia.onclick = () => {
+            document.body.classList.remove('modo-economia');
+        };
+
+        // Ocultar controles (Tela Limpa)
         btnLimpar.onclick = (e) => {
             e.stopPropagation();
             document.body.classList.add('tela-limpa');
