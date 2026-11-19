@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Câmera Móvel - OBS</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: #000; color: #fff; font-family: system-ui, -apple-system, sans-serif;
+            overflow: hidden; user-select: none;
+        }
+        #preview {
+            position: fixed; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: 1; background: #000;
+        }
+        .topo {
+            position: fixed; top: 16px; left: 16px; right: 16px; z-index: 10;
+            display: flex; justify-content: space-between; align-items: center;
+            transition: opacity 0.25s;
+        }
+        #badge-status {
+            background: rgba(0, 0, 0, 0.72); padding: 8px 14px; border-radius: 999px;
+            font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px;
+            backdrop-filter: blur(6px);
+        }
+        .ponto { width: 10px; height: 10px; border-radius: 50%; background: #888; }
+        .ponto.pronto { background: #2fff00; }
+        .ponto.no-ar { background: #ff2a2a; animation: piscar 1.2s infinite; }
+        @keyframes piscar { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+        .controles {
+            position: fixed; bottom: 24px; left: 16px; right: 16px; z-index: 10;
+            display: flex; flex-direction: column; gap: 10px; align-items: center;
+            transition: opacity 0.25s;
+        }
+        #info-ip {
+            font-size: 11px; color: rgba(255,255,255,0.65); font-family: monospace;
+            background: rgba(0,0,0,0.55); padding: 4px 10px; border-radius: 6px;
+        }
+        .linha-botoes {
+            display: flex; gap: 10px; width: 100%; max-width: 420px; justify-content: center;
+        }
+        button {
+            border: none; border-radius: 12px; font-weight: 700; font-size: 14px;
+            cursor: pointer; color: #fff; padding: 14px 18px;
+            background: rgba(30, 30, 30, 0.85); backdrop-filter: blur(6px);
+            transition: transform 0.1s, background 0.2s;
+        }
+        button:active { transform: scale(0.96); }
+        #btn-transmitir {
+            width: 100%; max-width: 420px; padding: 18px; font-size: 16px;
+            background: #007a08; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        #btn-transmitir.ao-vivo { background: #c62828; }
+        .btn-secundario { flex: 1; }
+        .btn-ativo { background: #1565c0; }
+        .btn-mutado { background: rgba(180, 30, 30, 0.85); }
+        .btn-mini { padding: 8px 12px; font-size: 12px; border-radius: 999px; }
+
+        body.tela-limpa .controles,
+        body.tela-limpa #btn-limpar { opacity: 0; pointer-events: none; }
+        #aviso-toque {
+            position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+            z-index: 5; font-size: 11px; color: rgba(255,255,255,0.45);
+            display: none; pointer-events: none;
+        }
+        body.tela-limpa #aviso-toque { display: block; }
+    </style>
+</head>
+<body>
+
+    <video id="preview" autoplay playsinline muted></video>
+
+    <div class="topo">
+        <div id="badge-status">
+            <span class="ponto" id="ponto"></span>
+            <span id="texto-status">Conectando...</span>
+        </div>
+        <button id="btn-limpar" class="btn-mini">Tela Limpa</button>
+    </div>
+
+    <div class="controles">
+        <div id="info-ip"></div>
+        <div class="linha-botoes">
+            <button id="btn-audio" class="btn-secundario btn-mutado">🎤 Áudio: OFF</button>
+            <button id="btn-camera" class="btn-secundario">🔄 Virar Câmera</button>
+        </div>
+        <button id="btn-transmitir" disabled>🎥 Iniciar Câmera 1080p</button>
+    </div>
+
+    <div id="aviso-toque">Toque na tela para mostrar os controles</div>
+
+    <script>
+        const CHAVE_OBS = 'obs-otacilio-celular-master';
+        const HOST_LOCAL = window.location.hostname || 'local';
+
+        const preview = document.getElementById('preview');
+        const btnTransmitir = document.getElementById('btn-transmitir');
+        const btnAudio = document.getElementById('btn-audio');
+        const btnCamera = document.getElementById('btn-camera');
+        const btnLimpar = document.getElementById('btn-limpar');
+        const textoStatus = document.getElementById('texto-status');
+        const ponto = document.getElementById('ponto');
+        const infoIp = document.getElementById('info-ip');
+
+        infoIp.textContent = `Host detectado: ${HOST_LOCAL}`;
+
+        let peer = null;
+        let streamAtual = null;
+        let chamadaAtiva = null;
+        let wakeLock = null;
+        let modoCamera = 'environment';
+        let audioAtivo = false;
+
+        window.addEventListener('beforeunload', (e) => {
+            if (chamadaAtiva) {
+                e.preventDefault();
+                e.returnValue = 'Câmera ao vivo! Deseja encerrar?';
+            }
+        });
+
+        async function ativarWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (e) {}
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && chamadaAtiva) {
+                ativarWakeLock();
+            }
+        });
+
+        function iniciarPeer() {
+            peer = new Peer();
+            peer.on('open', () => {
+                textoStatus.textContent = 'Pronto para transmitir';
+                ponto.className = 'ponto pronto';
+                btnTransmitir.disabled = false;
+            });
+            peer.on('disconnected', () => {
+                textoStatus.textContent = 'Reconectando...';
+                ponto.className = 'ponto';
+                peer.reconnect();
+            });
+            peer.on('error', () => {
+                textoStatus.textContent = 'Erro de rede';
+                ponto.className = 'ponto';
+            });
+        }
+
+        async function capturarCamera(facing) {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('HTTP_BLOQUEADO');
+            }
+            try {
+                return await navigator.
