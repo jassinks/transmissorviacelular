@@ -139,7 +139,6 @@
         let zoomAtual = 1.0;
         let usandoZoomHardware = false;
 
-        // Inicia PeerJS com servidores STUN estáveis
         function iniciarPeer() {
             peer = new Peer({
                 config: {
@@ -156,7 +155,6 @@
                     textoStatus.textContent = 'Servidor conectado';
                     ponto.className = 'ponto pronto';
                 }
-                // Se o usuário já abriu a câmera antes do peer conectar, dispara agora
                 if (streamAtual && !chamadaAtiva) {
                     conectarAoOBS();
                 }
@@ -189,17 +187,16 @@
             }
         });
 
-        // Captura em alta qualidade respeitando orientação nativa (vertical ou horizontal)
+        // Captura flexível (não trava orientação ao girar o iPhone)
         async function capturarCamera(facing) {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 throw new Error('Navegador sem acesso à câmera (use HTTPS no Safari).');
             }
-            const isPortrait = window.innerHeight > window.innerWidth;
             const constraintsAlta = {
                 video: {
                     facingMode: { ideal: facing },
-                    width: { ideal: isPortrait ? 1080 : 1920 },
-                    height: { ideal: isPortrait ? 1920 : 1080 },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
                     frameRate: { ideal: 30, max: 30 }
                 },
                 audio: {
@@ -208,18 +205,34 @@
                     autoGainControl: true
                 }
             };
+            let stream;
             try {
-                return await navigator.mediaDevices.getUserMedia(constraintsAlta);
+                stream = await navigator.mediaDevices.getUserMedia(constraintsAlta);
             } catch (e) {
-                return await navigator.mediaDevices.getUserMedia({
+                stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: facing },
                     audio: true
                 });
             }
+
+            // Prioriza fluidez de movimento e reforça foco automático contínuo
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack) {
+                if ('contentHint' in videoTrack) videoTrack.contentHint = 'motion';
+                if (videoTrack.getCapabilities) {
+                    const caps = videoTrack.getCapabilities();
+                    if (caps.focusMode && caps.focusMode.includes('continuous')) {
+                        try {
+                            await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+                        } catch (e) {}
+                    }
+                }
+            }
+            return stream;
         }
 
-        // Aumenta o bitrate de vídeo para garantir ótima qualidade no OBS
-        async function aumentarBitrate(call) {
+        // Otimiza bitrate para 3 Mbps priorizando fluidez sem travadas
+        async function otimizarTransmissao(call) {
             try {
                 const pc = call.peerConnection;
                 if (!pc) return;
@@ -227,7 +240,8 @@
                 if (!sender) return;
                 const params = sender.getParameters();
                 if (!params.encodings) params.encodings = [{}];
-                params.encodings[0].maxBitrate = 5000000; // 5 Mbps
+                params.degradationPreference = 'maintain-framerate';
+                params.encodings[0].maxBitrate = 3000000; // 3 Mbps estável no Wi-Fi
                 await sender.setParameters(params);
             } catch (e) {}
         }
@@ -235,7 +249,6 @@
         function conectarAoOBS() {
             if (!peerAberto || !streamAtual) return;
 
-            // Canal de dados para sincronizar zoom digital se necessário
             conexaoDados = peer.connect(CHAVE_OBS);
             conexaoDados.on('open', () => {
                 if (!usandoZoomHardware) {
@@ -244,7 +257,7 @@
             });
 
             chamadaAtiva = peer.call(CHAVE_OBS, streamAtual);
-            setTimeout(() => aumentarBitrate(chamadaAtiva), 1000);
+            setTimeout(() => otimizarTransmissao(chamadaAtiva), 1000);
 
             textoStatus.textContent = 'NO AR (OBS)';
             ponto.className = 'ponto no-ar';
@@ -252,7 +265,6 @@
             btnTransmitir.classList.add('ao-vivo');
         }
 
-        // Aplicar Zoom (tenta Hardware primeiro; se o iOS não liberar, usa Digital sincronizado com OBS)
         async function aplicarZoom(novoZoom) {
             zoomAtual = Math.min(4.0, Math.max(1.0, Math.round(novoZoom * 10) / 10));
             zoomLabel.textContent = zoomAtual.toFixed(1) + 'x';
@@ -277,7 +289,6 @@
                 }
             }
 
-            // Fallback: Zoom digital no preview + enviado ao OBS
             preview.style.transform = `scale(${zoomAtual})`;
             if (conexaoDados && conexaoDados.open) {
                 conexaoDados.send({ type: 'zoom', value: zoomAtual });
